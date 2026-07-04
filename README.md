@@ -1,28 +1,27 @@
-# Sprint 6 - Visual Resize Handles
+# Font Match only cleanup
 
-This patch improves the visual UI text editor.
+This package keeps the Sprint 11 `font-match` CLI command and removes the experimental Text Style Fidelity UI changes by restoring the visual editor MainWindow to the Sprint 10 version.
 
-## Added
+After extracting this package, delete these files if they exist:
 
-- Selection border around the active text object.
-- Right-side handle to change the layout box width with the mouse.
-- Bottom-right handle to resize the rendered text with the mouse.
-- Arrow key movement:
-  - Arrow keys move the selected object by 1 pixel.
-  - Shift + arrow keys move it by 10 pixels.
-- The side panel updates automatically while dragging/resizing.
+```bash
+rm -f src/Fallout.Tools.Core/Imaging/TextStyleProcessor.cs
+rm -f docs/TEXT_STYLE_FIDELITY.md
+```
 
-## Usage
+Then run:
 
-1. Open a clean UI image.
-2. Open an AAF font.
-3. Add a text object.
-4. Click/select the text object.
-5. Drag the text to move it.
-6. Drag the right cyan handle to change the layout box width.
-7. Drag the bottom-right cyan handle to resize the text.
-8. Export the final PNG.
+```bash
+dotnet build
+dotnet test
+```
 
-## Notes
+Commit only the font-match files and the reverted MainWindow:
 
-This sprint does not add FRM import/export yet. It only improves visual editing of translated UI text over static images.
+```bash
+git status --short
+git add src/Fallout.Tools.CLI/Program.cs src/Fallout.Tools.Core/FontMatching/AafFontMatcher.cs src/Fallout.Tools.UI/MainWindow.cs docs/FONT_MATCH.md README.md
+git add -u
+git commit -m "feat(fonts): add AAF font matching"
+git push
+```
