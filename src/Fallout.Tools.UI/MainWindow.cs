@@ -13,6 +13,8 @@ using Fallout.Tools.Core.AAF;
 using Fallout.Tools.Core.Imaging;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+using System.Globalization;
 
 namespace Fallout.Tools.UI;
 
@@ -27,6 +29,9 @@ public sealed class MainWindow : Window
     private readonly TextBox _yBox = new() { Text = "10" };
     private readonly TextBox _widthBox = new() { Text = "0" };
     private readonly TextBox _scaleBox = new() { Text = "1" };
+    private readonly TextBox _widthScaleBox = new() { Text = "1.0" };
+    private readonly TextBox _heightScaleBox = new() { Text = "1.0" };
+    private readonly TextBox _letterSpacingBox = new() { Text = "0" };
     private readonly ComboBox _alignBox = new();
     private readonly CheckBox _uppercaseBox = new() { Content = "Uppercase", IsChecked = true };
     private readonly TextBlock _status = new() { Text = "Open a base image and an AAF font to start." };
@@ -133,7 +138,10 @@ public sealed class MainWindow : Window
         panel.Children.Add(Labeled("X", _xBox));
         panel.Children.Add(Labeled("Y", _yBox));
         panel.Children.Add(Labeled("Width (0 = natural)", _widthBox));
-        panel.Children.Add(Labeled("Scale", _scaleBox));
+        panel.Children.Add(Labeled("Scale (integer)", _scaleBox));
+        panel.Children.Add(Labeled("Width scale", _widthScaleBox));
+        panel.Children.Add(Labeled("Height scale", _heightScaleBox));
+        panel.Children.Add(Labeled("Letter spacing", _letterSpacingBox));
         panel.Children.Add(Labeled("Align", _alignBox));
         panel.Children.Add(_uppercaseBox);
         panel.Children.Add(MakeButton("Apply changes", _ => ApplyEditorFieldsToSelected()));
@@ -141,7 +149,7 @@ public sealed class MainWindow : Window
         panel.Children.Add(new Separator());
         panel.Children.Add(new TextBlock
         {
-            Text = "Tip: drag text with the mouse. X/Y are the box position. Width + center/right control alignment inside that box.",
+            Text = "Tip: drag text with the mouse. Use Width scale to compress/expand long translations. Use Letter spacing to adjust character spacing.",
             TextWrapping = TextWrapping.Wrap
         });
         panel.Children.Add(_status);
@@ -288,6 +296,9 @@ public sealed class MainWindow : Window
             Y = ParseInt(_yBox.Text, 10),
             Width = ParseInt(_widthBox.Text, 0),
             Scale = Math.Max(1, ParseInt(_scaleBox.Text, 1)),
+            WidthScale = Math.Max(0.1, ParseDouble(_widthScaleBox.Text, 1.0)),
+            HeightScale = Math.Max(0.1, ParseDouble(_heightScaleBox.Text, 1.0)),
+            LetterSpacing = ParseInt(_letterSpacingBox.Text, 0),
             Align = (_alignBox.SelectedItem as string) ?? "left",
             ForceUppercase = _uppercaseBox.IsChecked == true,
             ImageControl = new AvaloniaImage { Stretch = Stretch.None }
@@ -323,10 +334,13 @@ public sealed class MainWindow : Window
         _selectedItem = item;
         _nameBox.Text = item.Name;
         _textBox.Text = item.Text;
-        _xBox.Text = item.X.ToString();
-        _yBox.Text = item.Y.ToString();
-        _widthBox.Text = item.Width.ToString();
-        _scaleBox.Text = item.Scale.ToString();
+        _xBox.Text = item.X.ToString(CultureInfo.InvariantCulture);
+        _yBox.Text = item.Y.ToString(CultureInfo.InvariantCulture);
+        _widthBox.Text = item.Width.ToString(CultureInfo.InvariantCulture);
+        _scaleBox.Text = item.Scale.ToString(CultureInfo.InvariantCulture);
+        _widthScaleBox.Text = item.WidthScale.ToString("0.###", CultureInfo.InvariantCulture);
+        _heightScaleBox.Text = item.HeightScale.ToString("0.###", CultureInfo.InvariantCulture);
+        _letterSpacingBox.Text = item.LetterSpacing.ToString(CultureInfo.InvariantCulture);
         _alignBox.SelectedItem = item.Align;
         _uppercaseBox.IsChecked = item.ForceUppercase;
         SetStatus($"Selected: {item.Name}");
@@ -346,6 +360,9 @@ public sealed class MainWindow : Window
         _selectedItem.Y = ParseInt(_yBox.Text, _selectedItem.Y);
         _selectedItem.Width = ParseInt(_widthBox.Text, _selectedItem.Width);
         _selectedItem.Scale = Math.Max(1, ParseInt(_scaleBox.Text, _selectedItem.Scale));
+        _selectedItem.WidthScale = Math.Max(0.1, ParseDouble(_widthScaleBox.Text, _selectedItem.WidthScale));
+        _selectedItem.HeightScale = Math.Max(0.1, ParseDouble(_heightScaleBox.Text, _selectedItem.HeightScale));
+        _selectedItem.LetterSpacing = ParseInt(_letterSpacingBox.Text, _selectedItem.LetterSpacing);
         _selectedItem.Align = (_alignBox.SelectedItem as string) ?? "left";
         _selectedItem.ForceUppercase = _uppercaseBox.IsChecked == true;
 
@@ -380,13 +397,23 @@ public sealed class MainWindow : Window
         if (_font is null) throw new InvalidOperationException("AAF font is not loaded.");
 
         var renderer = new AafTextRenderer(_palette);
-        return renderer.RenderText(_font, item.Text, new AafTextRenderOptions
+        SixLabors.ImageSharp.Image<Rgba32> image = renderer.RenderText(_font, item.Text, new AafTextRenderOptions
         {
             Scale = item.Scale,
-            LetterSpacing = 0,
+            LetterSpacing = item.LetterSpacing,
             LineSpacing = 0,
             ForceUppercase = item.ForceUppercase
         });
+
+        int newWidth = Math.Max(1, (int)Math.Round(image.Width * item.WidthScale));
+        int newHeight = Math.Max(1, (int)Math.Round(image.Height * item.HeightScale));
+
+        if (newWidth != image.Width || newHeight != image.Height)
+        {
+            image.Mutate(context => context.Resize(newWidth, newHeight, KnownResamplers.NearestNeighbor));
+        }
+
+        return image;
     }
 
     private void UpdateControlPosition(UiTextItem item, int renderedWidth)
@@ -422,8 +449,8 @@ public sealed class MainWindow : Window
         AvaloniaPoint canvasPosition = e.GetPosition(_canvas);
         item.X = Math.Max(0, (int)Math.Round(canvasPosition.X - _dragOffset.X));
         item.Y = Math.Max(0, (int)Math.Round(canvasPosition.Y - _dragOffset.Y));
-        _xBox.Text = item.X.ToString();
-        _yBox.Text = item.Y.ToString();
+        _xBox.Text = item.X.ToString(CultureInfo.InvariantCulture);
+        _yBox.Text = item.Y.ToString(CultureInfo.InvariantCulture);
         UpdateControlPosition(item, item.RenderedWidth);
     }
 
@@ -454,12 +481,30 @@ public sealed class MainWindow : Window
 
     private static int ParseInt(string? value, int fallback)
     {
-        return int.TryParse(value, out int result) ? result : fallback;
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int result) ? result : fallback;
+    }
+
+    private static double ParseDouble(string? value, double fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return fallback;
+        string normalized = value.Replace(',', '.');
+        return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out double result) ? result : fallback;
     }
 
     private static string SerializeLayoutLine(UiTextItem item)
     {
-        return $"{item.Name}|{item.X}|{item.Y}|{item.Width}|{item.Align}|{item.Text}";
+        return string.Join('|',
+            item.Name,
+            item.X.ToString(CultureInfo.InvariantCulture),
+            item.Y.ToString(CultureInfo.InvariantCulture),
+            item.Width.ToString(CultureInfo.InvariantCulture),
+            item.Align,
+            item.Scale.ToString(CultureInfo.InvariantCulture),
+            item.WidthScale.ToString("0.###", CultureInfo.InvariantCulture),
+            item.HeightScale.ToString("0.###", CultureInfo.InvariantCulture),
+            item.LetterSpacing.ToString(CultureInfo.InvariantCulture),
+            item.ForceUppercase ? "uppercase" : "normal",
+            item.Text);
     }
 
     private void SetStatus(string message)
@@ -476,6 +521,9 @@ public sealed class MainWindow : Window
         public int Width { get; set; }
         public string Align { get; set; } = "left";
         public int Scale { get; set; } = 1;
+        public double WidthScale { get; set; } = 1.0;
+        public double HeightScale { get; set; } = 1.0;
+        public int LetterSpacing { get; set; }
         public bool ForceUppercase { get; set; }
         public int RenderedWidth { get; set; }
         public int RenderedHeight { get; set; }
