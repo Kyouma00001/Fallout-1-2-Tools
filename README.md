@@ -1,41 +1,11 @@
-# Fallout 1/2 Tools
+# Render uppercase hotfix
 
-Open-source tools for Fallout 1, Fallout 2, and related classic Fallout mods.
+Adds `--uppercase` / `--force-uppercase` to the `render` command.
 
-## MVP 1: FalloutFontTool
-
-The first MVP focuses on Fallout `.AAF` fonts:
-
-- Read `.AAF` font files.
-- Print font metadata.
-- Export every glyph as PNG.
-- Export a 16x16 atlas PNG.
-
-## Quick start
+Example:
 
 ```bash
-dotnet restore
-dotnet build
+dotnet run --project src/Fallout.Tools.CLI -- render samples/FONT4.AAF "negociação" exports/NEGOCIACAO.png --scale 1 --palette orange --uppercase
 ```
 
-Show font information:
-
-```bash
-dotnet run --project src/Fallout.Tools.CLI -- info samples/FONT3.AAF
-```
-
-Export glyphs:
-
-```bash
-dotnet run --project src/Fallout.Tools.CLI -- export samples/FONT3.AAF exports/FONT3 --scale 4
-```
-
-Run tests:
-
-```bash
-dotnet test
-```
-
-## Asset note
-
-Do not commit original Fallout game assets such as `.AAF`, `.FON`, `.PAL`, `.DAT`, or `.FRM` files. Keep them locally in `samples/` for testing.
+This keeps the original AAF glyphs, but converts the input text to uppercase before rendering.
