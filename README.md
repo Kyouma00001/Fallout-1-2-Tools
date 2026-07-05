@@ -1,4 +1,4 @@
-﻿# Fallout 1/2 Tools
+﻿# Fallout1-2-FRM-Edit-Tool
 
 Open-source tools for inspecting, exporting, composing, and editing static Fallout 1/2 UI assets during localization work.
 
